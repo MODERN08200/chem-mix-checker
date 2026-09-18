@@ -1,19 +1,8 @@
 [
   {
     "id": "bleach-ammonia",
-    "aliasesA": [
-      "차아염소산나트륨",
-      "락스",
-      "표백제",
-      "sodium hypochlorite",
-      "bleach"
-    ],
-    "aliasesB": [
-      "암모니아",
-      "ammonia",
-      "ammonium hydroxide",
-      "수산화암모늄"
-    ],
+    "aliasesA": ["차아염소산나트륨", "락스", "표백제", "sodium hypochlorite", "bleach"],
+    "aliasesB": ["암모니아", "ammonia", "ammonium hydroxide", "수산화암모늄"],
     "severity": "danger",
     "title": "클로라민 가스 발생",
     "summary": "락스류 표백제와 암모니아(또는 암모니아 성분 세정제)를 섞으면 독성이 강한 클로라민(chloramine) 가스가 발생합니다.",
@@ -22,19 +11,8 @@
   },
   {
     "id": "bleach-vinegar",
-    "aliasesA": [
-      "차아염소산나트륨",
-      "락스",
-      "표백제",
-      "sodium hypochlorite",
-      "bleach"
-    ],
-    "aliasesB": [
-      "식초",
-      "아세트산",
-      "vinegar",
-      "acetic acid"
-    ],
+    "aliasesA": ["차아염소산나트륨", "락스", "표백제", "sodium hypochlorite", "bleach"],
+    "aliasesB": ["식초", "아세트산", "vinegar", "acetic acid"],
     "severity": "danger",
     "title": "염소 가스 발생",
     "summary": "락스류 표백제를 식초 등 산성 물질과 섞으면 유독한 염소(chlorine) 가스가 발생합니다.",
@@ -43,16 +21,8 @@
   },
   {
     "id": "peroxide-vinegar",
-    "aliasesA": [
-      "과산화수소",
-      "hydrogen peroxide"
-    ],
-    "aliasesB": [
-      "식초",
-      "아세트산",
-      "vinegar",
-      "acetic acid"
-    ],
+    "aliasesA": ["과산화수소", "hydrogen peroxide"],
+    "aliasesB": ["식초", "아세트산", "vinegar", "acetic acid"],
     "severity": "caution",
     "title": "과아세트산 생성 가능",
     "summary": "과산화수소와 식초를 섞으면 부식성이 있는 과아세트산(peracetic acid)이 만들어질 수 있습니다.",
@@ -61,21 +31,8 @@
   },
   {
     "id": "bleach-alcohol",
-    "aliasesA": [
-      "차아염소산나트륨",
-      "락스",
-      "표백제",
-      "sodium hypochlorite",
-      "bleach"
-    ],
-    "aliasesB": [
-      "에탄올",
-      "알코올",
-      "isopropyl alcohol",
-      "이소프로필알코올",
-      "ethanol",
-      "alcohol"
-    ],
+    "aliasesA": ["차아염소산나트륨", "락스", "표백제", "sodium hypochlorite", "bleach"],
+    "aliasesB": ["에탄올", "알코올", "isopropyl alcohol", "이소프로필알코올", "ethanol", "alcohol"],
     "severity": "danger",
     "title": "클로로폼 등 유해 부산물 생성",
     "summary": "표백제와 알코올을 섞으면 클로로폼 등 독성 염소화 화합물이 생길 수 있습니다.",
@@ -84,14 +41,8 @@
   },
   {
     "id": "sulfuric-water",
-    "aliasesA": [
-      "황산",
-      "sulfuric acid"
-    ],
-    "aliasesB": [
-      "물",
-      "water"
-    ],
+    "aliasesA": ["황산", "sulfuric acid"],
+    "aliasesB": ["물", "water"],
     "severity": "caution",
     "title": "격렬한 발열 반응 (첨가 순서 중요)",
     "summary": "황산을 물에 희석할 때 매우 큰 열이 발생합니다. 반드시 '산을 물에' 넣는 순서를 지켜야 합니다.",
@@ -100,16 +51,8 @@
   },
   {
     "id": "ammonia-bleach-toilet",
-    "aliasesA": [
-      "암모니아",
-      "ammonia"
-    ],
-    "aliasesB": [
-      "차아염소산나트륨",
-      "락스",
-      "bleach",
-      "sodium hypochlorite"
-    ],
+    "aliasesA": ["암모니아", "ammonia"],
+    "aliasesB": ["차아염소산나트륨", "락스", "bleach", "sodium hypochlorite"],
     "severity": "danger",
     "title": "클로라민 가스 발생",
     "summary": "암모니아 성분 세정제와 염소계 표백제를 함께 쓰면 독성 가스가 나옵니다.",
@@ -118,14 +61,8 @@
   },
   {
     "id": "hydrogenperoxide-acetone",
-    "aliasesA": [
-      "과산화수소",
-      "hydrogen peroxide"
-    ],
-    "aliasesB": [
-      "아세톤",
-      "acetone"
-    ],
+    "aliasesA": ["과산화수소", "hydrogen peroxide"],
+    "aliasesB": ["아세톤", "acetone"],
     "severity": "danger",
     "title": "불안정한 과산화물 생성 위험",
     "summary": "과산화수소와 아세톤이 산 촉매와 함께 반응하면 열에 민감하고 폭발성이 있는 유기과산화물이 생성될 수 있습니다.",
@@ -134,15 +71,8 @@
   },
   {
     "id": "bleach-rubbing-alcohol",
-    "aliasesA": [
-      "차아염소산나트륨",
-      "락스",
-      "bleach"
-    ],
-    "aliasesB": [
-      "과산화수소",
-      "hydrogen peroxide"
-    ],
+    "aliasesA": ["차아염소산나트륨", "락스", "bleach"],
+    "aliasesB": ["과산화수소", "hydrogen peroxide"],
     "severity": "caution",
     "title": "산소 가스 급격 발생",
     "summary": "표백제와 과산화수소를 섞으면 산소 가스가 급격히 발생해 거품이 넘칠 수 있습니다.",
@@ -151,16 +81,8 @@
   },
   {
     "id": "generic-acid-base",
-    "aliasesA": [
-      "염산",
-      "hydrochloric acid"
-    ],
-    "aliasesB": [
-      "수산화나트륨",
-      "가성소다",
-      "sodium hydroxide",
-      "lye"
-    ],
+    "aliasesA": ["염산", "hydrochloric acid"],
+    "aliasesB": ["수산화나트륨", "가성소다", "sodium hydroxide", "lye"],
     "severity": "caution",
     "title": "중화 반응 및 급격한 발열",
     "summary": "강산과 강염기를 섞으면 중화 반응이 일어나며 짧은 시간에 많은 열이 발생합니다.",
