@@ -15,8 +15,9 @@ const PUG_REST = "https://pubchem.ncbi.nlm.nih.gov/rest/pug";
 const PUG_VIEW = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view";
 
 // worker.js를 배포한 뒤 그 주소를 여기에 넣으세요. 예: "https://chem-mix-proxy.내계정.workers.dev"
-// 비워두면 KOSHA MSDS 조회 없이 나머지 기능(PubChem 조회, 위험 조합 판정)은 그대로 작동합니다.
+// 비워두면 KOSHA/K-REACH 조회 없이 나머지 기능(PubChem 조회, 위험 조합 판정)은 그대로 작동합니다.
 const KOSHA_PROXY_URL = "";
+const KREACH_PROXY_URL = "";
 
 /* ----------------------------------------------------------
    GHS H-코드 → 한국어 유해·위험문구 (참고용 표준 번역)
@@ -249,9 +250,10 @@ async function lookupCompound(name){
   const propData = await propRes.json();
   const props = (propData.PropertyTable && propData.PropertyTable.Properties && propData.PropertyTable.Properties[0]) || {};
 
-  const [ghsCodes, kosha] = await Promise.all([
+  const [ghsCodes, kosha, kreach] = await Promise.all([
     fetchGHSCodes(cid),
-    fetchKoshaInfo(name)
+    fetchKoshaInfo(name),
+    fetchKreachInfo(name)
   ]);
 
   return {
@@ -265,8 +267,10 @@ async function lookupCompound(name){
     pubchemUrl: `https://pubchem.ncbi.nlm.nih.gov/compound/${cid}`,
     chemspiderUrl: `https://www.chemspider.com/Search.aspx?q=${encodeURIComponent(name)}`,
     koshaSearchUrl: `https://msds.kosha.or.kr/MSDSInfo/kcic/msdssearchAll.do`,
+    kreachSearchUrl: `https://kreach.mcee.go.kr/repwrt/mttr/kr/mttrList.do`,
     ghsCodes,
-    kosha
+    kosha,
+    kreach
   };
 }
 
@@ -305,7 +309,21 @@ function collectStrings(node, out){
 async function fetchKoshaInfo(name){
   if (!KOSHA_PROXY_URL) return null;
   try{
-    const res = await fetch(`${KOSHA_PROXY_URL}?q=${encodeURIComponent(name)}&cnd=0`);
+    const res = await fetch(`${KOSHA_PROXY_URL}?source=kosha&q=${encodeURIComponent(name)}&cnd=0`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const item = data.items && data.items[0];
+    return item || null;
+  }catch(e){
+    return null;
+  }
+}
+
+/* ---------------- K-REACH(한국환경공단 화학물질정보) 조회 (프록시 경유) ---------------- */
+async function fetchKreachInfo(name){
+  if (!KREACH_PROXY_URL) return null;
+  try{
+    const res = await fetch(`${KREACH_PROXY_URL}?source=kreach&q=${encodeURIComponent(name)}`);
     if (!res.ok) return null;
     const data = await res.json();
     const item = data.items && data.items[0];
@@ -351,6 +369,9 @@ function renderCompoundCard(compound, tags){
   const koshaLine = compound.kosha
     ? `<span>KOSHA 국문명 <b>${escapeHTML(compound.kosha.chemNameKor || "-")}</b></span><span>CAS No. <b>${escapeHTML(compound.kosha.casNo || "-")}</b></span>`
     : "";
+  const kreachLine = compound.kreach
+    ? `<span>K-REACH 물질분류 <b>${escapeHTML(compound.kreach.mttrclassty || "-")}</b></span>`
+    : "";
 
   return {
     card: `
@@ -364,11 +385,13 @@ function renderCompoundCard(compound, tags){
           <span>분자량 <b>${escapeHTML(String(compound.weight))} g/mol</b></span>
           <span>CID <b>${compound.cid}</b></span>
           ${koshaLine}
+          ${kreachLine}
         </div>
         <div class="compound-links">
           <a href="${compound.pubchemUrl}" target="_blank" rel="noopener">PubChem</a>
           <a href="${compound.chemspiderUrl}" target="_blank" rel="noopener">ChemSpider</a>
           <a href="${compound.koshaSearchUrl}" target="_blank" rel="noopener">KOSHA MSDS</a>
+          <a href="${compound.kreachSearchUrl}" target="_blank" rel="noopener">K-REACH</a>
         </div>
       </div>`,
     hazardList: ghsItems
