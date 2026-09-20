@@ -12,6 +12,11 @@
  *
  * 지원하는 출처(source)
  * ----------------------
+ * - pubchem: PubChem PUG REST/PUG View 요청을 그대로 대신 호출합니다. PubChem 자체는
+ *            CORS를 지원해서 보통은 필요 없지만, 사내망 등에서 pubchem.ncbi.nlm.nih.gov
+ *            접속이 막혀 있는 경우를 위한 대비용입니다. url 파라미터로 받은 주소가
+ *            pubchem.ncbi.nlm.nih.gov 도메인인지 검사해서, 이 Worker가 다른 사이트를
+ *            대신 호출해주는 범용 프록시로 악용되지 않도록 막습니다.
  * - kosha  : 안전보건공단 MSDS (http://msds.kosha.or.kr/openapi/service/msdschem/chemlist)
  * - kreach : 한국환경공단 화학물질 정보 조회 서비스 (kreach.mcee.go.kr 화학물질정보처리시스템의 데이터 출처)
  *            ⚠️ 이 API는 data.go.kr 검색 결과에 정확한 요청 URL(Endpoint)이 나오지 않습니다.
@@ -28,18 +33,21 @@
  *      - KOSHA_SERVICE_KEY   : KOSHA MSDS API 인증키 (kosha 기능을 쓸 경우 필수)
  *      - KREACH_SERVICE_KEY  : 한국환경공단 화학물질정보 API 인증키 (kreach 기능을 쓸 경우 필수)
  *      - KREACH_BASE_URL     : 위 API의 정확한 요청 URL (data.go.kr 승인 후 확인, kreach 기능을 쓸 경우 필수)
- *    필요한 기능의 키만 넣으면 되고, 나머지는 비워두면 그 기능만 꺼집니다.
+ *    pubchem 기능은 별도 키가 필요 없어 바로 동작합니다. 필요한 기능의 키만 넣으면 되고,
+ *    나머지는 비워두면 그 기능만 꺼집니다.
  * 5. 배포된 주소(예: https://chem-mix-proxy.내계정.workers.dev)를
- *    script.js 맨 위 KOSHA_PROXY_URL / KREACH_PROXY_URL 에 붙여넣습니다.
+ *    script.js 맨 위 PUBCHEM_PROXY_URL / KOSHA_PROXY_URL / KREACH_PROXY_URL 에 붙여넣습니다.
  *
  * 사용 예
  * --------
+ * GET {워커주소}?source=pubchem&url=https%3A%2F%2Fpubchem.ncbi.nlm.nih.gov%2Frest%2Fpug%2Fcompound%2Fname%2F%ED%99%A9%EC%82%B0%2Fcids%2FJSON
  * GET {워커주소}?source=kosha&q=벤젠&cnd=0
  *   cnd : 검색구분 (0=국문명, 1=CAS No, 2=UN No, 3=KE No, 4=EN No / 기본값 0)
  * GET {워커주소}?source=kreach&q=71-43-2
  */
 
 const KOSHA_BASE_URL = "http://msds.kosha.or.kr/openapi/service/msdschem/chemlist";
+const PUBCHEM_ALLOWED_HOST = "pubchem.ncbi.nlm.nih.gov";
 
 export default {
   async fetch(request, env) {
@@ -49,8 +57,10 @@ export default {
 
     const url = new URL(request.url);
     const source = url.searchParams.get("source") || "kosha";
-    const q = url.searchParams.get("q");
 
+    if (source === "pubchem") return withCORS(await handlePubchem(url, env));
+
+    const q = url.searchParams.get("q");
     if (!q) {
       return withCORS(jsonResponse({ error: "q 파라미터(검색어)가 필요합니다." }, 400));
     }
@@ -58,9 +68,41 @@ export default {
     if (source === "kosha") return withCORS(await handleKosha(q, url, env));
     if (source === "kreach") return withCORS(await handleKreach(q, env));
 
-    return withCORS(jsonResponse({ error: `알 수 없는 source: ${source} (kosha 또는 kreach만 지원)` }, 400));
+    return withCORS(jsonResponse({ error: `알 수 없는 source: ${source} (pubchem, kosha, kreach만 지원)` }, 400));
   }
 };
+
+/* ---------------- PubChem 패스스루 ---------------- */
+async function handlePubchem(url, env) {
+  const target = url.searchParams.get("url");
+  if (!target) {
+    return jsonResponse({ error: "url 파라미터(PubChem 요청 주소)가 필요합니다." }, 400);
+  }
+
+  let targetUrl;
+  try {
+    targetUrl = new URL(target);
+  } catch (e) {
+    return jsonResponse({ error: "url 파라미터가 올바른 주소 형식이 아닙니다." }, 400);
+  }
+
+  // 이 Worker가 아무 사이트나 대신 호출해주는 범용 프록시가 되지 않도록,
+  // PubChem 도메인으로 가는 요청만 허용합니다.
+  if (targetUrl.hostname !== PUBCHEM_ALLOWED_HOST) {
+    return jsonResponse({ error: `이 프록시는 ${PUBCHEM_ALLOWED_HOST} 요청만 대신 호출할 수 있습니다.` }, 400);
+  }
+
+  try {
+    const upstream = await fetch(targetUrl.toString());
+    const body = await upstream.text();
+    return new Response(body, {
+      status: upstream.status,
+      headers: { "Content-Type": upstream.headers.get("Content-Type") || "application/json; charset=utf-8" }
+    });
+  } catch (err) {
+    return jsonResponse({ error: "PubChem 프록시 처리 중 오류: " + err.message }, 500);
+  }
+}
 
 /* ---------------- KOSHA MSDS ---------------- */
 async function handleKosha(searchWrd, url, env) {
