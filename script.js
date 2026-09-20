@@ -2,22 +2,37 @@
    혼합주의 (Chemical Mix Checker)
 
    데이터 출처
-   - PubChem PUG REST / PUG View API : 이름 검색, 구조, GHS 분류 (직접 호출, CORS 지원)
+   - PubChem PUG REST / PUG View API : 이름·화학식 검색, 구조, GHS 분류.
+     기본적으로는 브라우저에서 직접 호출합니다(PubChem은 CORS를 지원합니다).
+     다만 사내망 등에서 pubchem.ncbi.nlm.nih.gov 접속 자체가 막혀 있거나 네트워크
+     문제로 직접 호출이 계속 실패하는 환경을 위해, 아래 PUBCHEM_PROXY_URL을 채우면
+     같은 Cloudflare Worker(worker.js)를 거쳐서 호출하도록 전환할 수 있습니다.
    - ChemSpider : API 키가 있어야 하고 CORS도 지원하지 않아, 검색 페이지로 연결되는
      외부 링크만 제공합니다.
-   - 안전보건공단(KOSHA) MSDS Open API : data.go.kr에서 개인 인증키를 신청해야 하고
-     역시 브라우저에서 직접 호출하면 CORS에 막힙니다. 그래서 인증키를 안전하게 보관하는
-     작은 중계 서버(Cloudflare Worker, worker.js 참고)를 거쳐서 불러옵니다.
-     PROXY_URL을 비워두면 이 기능은 자동으로 꺼지고 사이트의 나머지 기능은 그대로 동작합니다.
+   - 안전보건공단(KOSHA) MSDS · 한국환경공단(K-REACH) Open API : data.go.kr에서 개인
+     인증키를 신청해야 하고 역시 브라우저에서 직접 호출하면 CORS에 막힙니다. 그래서
+     인증키를 안전하게 보관하는 작은 중계 서버(Cloudflare Worker, worker.js 참고)를
+     거쳐서 불러옵니다. 각 PROXY_URL을 비워두면 그 기능만 자동으로 꺼지고 사이트의
+     나머지 기능은 그대로 동작합니다.
    ========================================================== */
 
 const PUG_REST = "https://pubchem.ncbi.nlm.nih.gov/rest/pug";
 const PUG_VIEW = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view";
+const PUG_AUTOCOMPLETE = "https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound";
 
 // worker.js를 배포한 뒤 그 주소를 여기에 넣으세요. 예: "https://chem-mix-proxy.내계정.workers.dev"
-// 비워두면 KOSHA/K-REACH 조회 없이 나머지 기능(PubChem 조회, 위험 조합 판정)은 그대로 작동합니다.
+// 세 값 모두 같은 Worker 주소를 넣으면 됩니다 — 어떤 API를 부를지는 요청 파라미터(source)로 구분됩니다.
+// 비워두면(기본값) 그 기능은 직접 호출하거나(PubChem) 꺼진 채로(KOSHA/K-REACH) 나머지 기능은 그대로 작동합니다.
+const PUBCHEM_PROXY_URL = "";
 const KOSHA_PROXY_URL = "";
 const KREACH_PROXY_URL = "";
+
+// PubChem 호출 공통 헬퍼. PUBCHEM_PROXY_URL이 비어 있으면 브라우저에서 직접 호출하고,
+// 채워져 있으면 Worker를 거쳐서 호출합니다(worker.js의 handlePubchem 참고).
+async function pubchemFetch(url){
+  if (!PUBCHEM_PROXY_URL) return fetch(url);
+  return fetch(`${PUBCHEM_PROXY_URL}?source=pubchem&url=${encodeURIComponent(url)}`);
+}
 
 /* ----------------------------------------------------------
    GHS H-코드 → 한국어 유해·위험문구 (참고용 표준 번역)
@@ -212,8 +227,8 @@ function setupAutocomplete(input, list){
 
 async function fetchSuggestions(query, list, input){
   try{
-    const url = `https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound/${encodeURIComponent(query)}/json?limit=8`;
-    const res = await fetch(url);
+    const url = `${PUG_AUTOCOMPLETE}/${encodeURIComponent(query)}/json?limit=8`;
+    const res = await pubchemFetch(url);
     if (!res.ok) throw new Error("autocomplete failed");
     const data = await res.json();
     const names = (data && data.dictionary_terms && data.dictionary_terms.compound) || [];
@@ -239,14 +254,60 @@ function escapeHTML(str){
 }
 
 /* ---------------- PubChem 조회 ---------------- */
-async function lookupCompound(name){
-  const cidRes = await fetch(`${PUG_REST}/compound/name/${encodeURIComponent(name)}/cids/JSON`);
-  if (!cidRes.ok) throw new Error(`"${name}"을(를) PubChem에서 찾을 수 없습니다.`);
-  const cidData = await cidRes.json();
-  const cid = cidData.IdentifierList && cidData.IdentifierList.CID && cidData.IdentifierList.CID[0];
-  if (!cid) throw new Error(`"${name}"에 대한 화합물 정보를 찾을 수 없습니다.`);
 
-  const propRes = await fetch(`${PUG_REST}/compound/cid/${cid}/property/IUPACName,MolecularFormula,MolecularWeight,CanonicalSMILES/JSON`);
+// 이름으로 먼저 찾고, 실패하면 화학식(H2SO4, NaOH 같은 원소 기호 표기)으로 다시 찾습니다.
+// PubChem은 화학식 검색(fastformula)이 비동기라, 결과가 바로 오지 않으면 ListKey로 잠깐 폴링합니다.
+async function resolveCid(name){
+  const byName = await tryNameSearch(name);
+  if (byName) return byName;
+
+  const byFormula = await tryFormulaSearch(name);
+  if (byFormula) return byFormula;
+
+  throw new Error(`"${name}"을(를) PubChem에서 찾을 수 없습니다. 정확한 화학명이나 원소 기호(예: H2SO4)로 다시 시도해 주세요.`);
+}
+
+async function tryNameSearch(name){
+  try{
+    const res = await pubchemFetch(`${PUG_REST}/compound/name/${encodeURIComponent(name)}/cids/JSON`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const cid = data.IdentifierList && data.IdentifierList.CID && data.IdentifierList.CID[0];
+    return cid || null;
+  }catch(e){
+    return null;
+  }
+}
+
+async function tryFormulaSearch(formula){
+  try{
+    const res = await pubchemFetch(`${PUG_REST}/compound/fastformula/${encodeURIComponent(formula)}/cids/JSON`);
+    if (!res.ok) return null;
+    let data = await res.json();
+    data = await resolveListKey(data);
+    const cid = data && data.IdentifierList && data.IdentifierList.CID && data.IdentifierList.CID[0];
+    return cid || null;
+  }catch(e){
+    return null;
+  }
+}
+
+// PubChem의 화학식·구조 검색은 비동기 작업이라 바로 결과 대신 ListKey를 줄 때가 있습니다.
+// 몇 초 간격으로 최대 5번까지 다시 물어봐서 결과가 준비됐는지 확인합니다.
+async function resolveListKey(data, attempt = 0){
+  const listKey = data && data.Waiting && data.Waiting.ListKey;
+  if (!listKey || attempt >= 5) return data;
+  await new Promise(r => setTimeout(r, 1500));
+  const res = await pubchemFetch(`${PUG_REST}/compound/listkey/${listKey}/cids/JSON`);
+  if (!res.ok) return data;
+  const next = await res.json();
+  return resolveListKey(next, attempt + 1);
+}
+
+async function lookupCompound(name){
+  const cid = await resolveCid(name);
+
+  const propRes = await pubchemFetch(`${PUG_REST}/compound/cid/${cid}/property/IUPACName,MolecularFormula,MolecularWeight,CanonicalSMILES/JSON`);
   const propData = await propRes.json();
   const props = (propData.PropertyTable && propData.PropertyTable.Properties && propData.PropertyTable.Properties[0]) || {};
 
@@ -276,7 +337,7 @@ async function lookupCompound(name){
 
 async function fetchGHSCodes(cid){
   try{
-    const res = await fetch(`${PUG_VIEW}/data/compound/${cid}/JSON?heading=GHS+Classification`);
+    const res = await pubchemFetch(`${PUG_VIEW}/data/compound/${cid}/JSON?heading=GHS+Classification`);
     if (!res.ok) return [];
     const data = await res.json();
     const strings = [];
